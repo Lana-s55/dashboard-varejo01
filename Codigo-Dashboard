@@ -1,0 +1,221 @@
+import pandas as pd
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.patches import FancyBboxPatch
+import numpy as np
+
+# -------------------- Leitura e Limpeza -------------------- #
+df = pd.read_csv('varejoonline.csv', encoding='latin-1')
+
+print("Dataset Varejo Online Carregado com Sucesso. Primeiras 5 Linhas:")
+print(df.head())
+
+print('\nNumero totais de Linhas:')
+print(len(df))
+
+print("\nUltimas Linhas:")
+print(df.tail())
+
+print("\nQuantidade de Linhas e Colunas:")
+print(df.shape)
+
+print("Informações gerais do DataFrame:")
+print(df.info())
+
+print('\nColunas')
+print(df.columns.tolist())
+
+print('\nDescricao Estatistica')
+print(df.describe())
+
+print("Tipos de dados de cada coluna (df.dtypes):")
+print(df.dtypes)
+
+print('\nQuantidade de valores únicos por coluna')
+print(df.nunique())
+
+print("Número total de linhas duplicadas:")
+print(df.duplicated().sum())
+
+print("Removendo linhas duplicadas...")
+df_cleaned = df.drop_duplicates().copy()
+print("Primeiras 5 linhas do DataFrame após a remoção de duplicatas:")
+print(df_cleaned.head())
+
+# -------------------- Preparação dos Dados -------------------- #
+
+# Gráfico 1 - Top 10 Produtos Mais Vendidos (Barra)
+top10_produtos = df_cleaned.groupby('Description')['Quantity'].sum().reset_index()
+top10_produtos = top10_produtos.sort_values('Quantity', ascending=True).tail(10)
+
+# Gráfico 2 - Vendas ao longo do tempo por mês (Linha)
+df_cleaned['InvoiceDate'] = pd.to_datetime(df_cleaned['InvoiceDate'], dayfirst=True)
+ano = df_cleaned['InvoiceDate'].dt.year.astype(str)
+mes = df_cleaned['InvoiceDate'].dt.month.apply(lambda m: str(m).zfill(2))
+df_cleaned['Mes'] = ano + '-' + mes
+vendas_mes = df_cleaned.groupby('Mes')['Quantity'].sum().reset_index()
+
+# Gráfico 3 - Participação dos Top 10 Produtos na Receita (Pizza)
+df_cleaned['Receita'] = df_cleaned['Quantity'] * df_cleaned['UnitPrice']
+top10_receita = df_cleaned.groupby('Description')['Receita'].sum().reset_index()
+top10_receita = top10_receita.sort_values('Receita', ascending=False).head(10)
+
+# -------------------- KPIs -------------------- #
+total_pedidos  = df_cleaned['InvoiceNo'].nunique()
+total_receita  = df_cleaned['Receita'].sum()
+total_clientes = df_cleaned['CustomerID'].nunique() if 'CustomerID' in df_cleaned.columns else 0
+total_paises   = df_cleaned['Country'].nunique()
+
+# -------------------- Paleta de Cores -------------------- #
+BG      = '#0D0F1A'
+CARD_BG = '#161928'
+BORDER  = '#252840'
+TEXT    = '#E8EAF6'
+SUBTEXT = '#8892B0'
+ACCENT  = '#00D4FF'
+
+PIZZA_COLORS = [
+    '#00D4FF','#7B2FBE','#06FFA5','#FF6B6B',
+    '#FFD93D','#4ECDC4','#A855F7','#F97316',
+    '#EC4899','#84CC16',
+]
+
+def make_gradient_colors(n, c1, c2):
+    c1 = np.array(matplotlib.colors.to_rgb(c1))
+    c2 = np.array(matplotlib.colors.to_rgb(c2))
+    return [tuple(c1 + (c2 - c1) * i / max(n - 1, 1)) for i in range(n)]
+
+def style_ax(ax, grid_axis='y'):
+    ax.set_facecolor(CARD_BG)
+    ax.tick_params(colors=SUBTEXT, labelsize=8)
+    ax.xaxis.label.set_color(SUBTEXT)
+    ax.yaxis.label.set_color(SUBTEXT)
+    ax.title.set_color(TEXT)
+    ax.title.set_fontsize(12)
+    ax.title.set_fontweight('bold')
+    for spine in ax.spines.values():
+        spine.set_edgecolor(BORDER)
+    ax.grid(axis=grid_axis, color=BORDER, linewidth=0.5, alpha=0.6)
+    ax.set_axisbelow(True)
+
+# -------------------- Figure -------------------- #
+fig = plt.figure(figsize=(16, 24), facecolor=BG)
+
+gs = gridspec.GridSpec(
+    3, 1,
+    figure=fig,
+    hspace=0.55,
+    top=0.78,
+    bottom=0.04,
+    left=0.08,
+    right=0.95,
+)
+
+# ── Título ───────────────────────────────────────────────────────────────────
+fig.text(0.5, 0.965, 'VAREJO ONLINE  ·  ANALYTICS',
+         ha='center', fontsize=22, fontweight='bold',
+         color=TEXT, fontfamily='monospace')
+fig.text(0.5, 0.950, 'Dashboard de Desempenho Comercial',
+         ha='center', fontsize=11, color=SUBTEXT)
+fig.add_artist(plt.Line2D([0.04, 0.96], [0.940, 0.940],
+               transform=fig.transFigure, color=BORDER, linewidth=1))
+
+# ── KPI Cards ────────────────────────────────────────────────────────────────
+kpis = [
+    ('Total de Pedidos', f'{total_pedidos:,}',      ACCENT),
+    ('Receita Total',    f'£ {total_receita:,.0f}', '#06FFA5'),
+    ('Clientes Unicos',  f'{total_clientes:,}',     '#FFD93D'),
+    ('Paises Atendidos', f'{total_paises}',         '#FF6B6B'),
+]
+kpi_xs = [0.13, 0.38, 0.63, 0.88]
+for (label, value, color), x in zip(kpis, kpi_xs):
+    box = FancyBboxPatch((x - 0.11, 0.870), 0.21, 0.055,
+                          boxstyle='round,pad=0.008',
+                          transform=fig.transFigure,
+                          facecolor=CARD_BG, edgecolor=BORDER, linewidth=1,
+                          clip_on=False, zorder=3)
+    fig.patches.append(box)
+    fig.text(x, 0.910, value, ha='center', va='center',
+             fontsize=18, fontweight='bold', color=color, zorder=4)
+    fig.text(x, 0.880, label.upper(), ha='center', va='center',
+             fontsize=8, color=SUBTEXT, fontfamily='monospace', zorder=4)
+
+fig.add_artist(plt.Line2D([0.04, 0.96], [0.858, 0.858],
+               transform=fig.transFigure, color=BORDER, linewidth=1))
+
+# ── Gráfico 1 — Barra: Top 10 Produtos Mais Vendidos ─────────────────────────
+ax1 = fig.add_subplot(gs[0])
+style_ax(ax1, grid_axis='x')
+cores1 = make_gradient_colors(10, '#1a3a2a', '#06FFA5')
+bars = ax1.barh(top10_produtos['Description'], top10_produtos['Quantity'],
+                color=cores1, edgecolor='none')
+ax1.set_title('Top 10 Produtos Mais Vendidos')
+ax1.set_xlabel('Quantidade', fontsize=9)
+ax1.tick_params(axis='y', labelsize=8)
+ax1.grid(axis='y', visible=False)
+# Valor no final de cada barra
+for bar in bars:
+    w = bar.get_width()
+    ax1.text(w + max(top10_produtos['Quantity']) * 0.01, bar.get_y() + bar.get_height() / 2,
+             f'{int(w):,}', va='center', ha='left', color=SUBTEXT, fontsize=8)
+
+# ── Gráfico 2 — Linha: Vendas Mensais ────────────────────────────────────────
+ax2 = fig.add_subplot(gs[1])
+style_ax(ax2, grid_axis='y')
+ax2.grid(axis='x', color=BORDER, linewidth=0.5, alpha=0.4)
+xs = list(range(len(vendas_mes)))
+ys = vendas_mes['Quantity'].values
+ax2.fill_between(xs, ys, alpha=0.08, color=ACCENT)
+ax2.plot(xs, ys, color=ACCENT, linewidth=2.5)
+ax2.scatter(xs, ys, color=ACCENT, s=55, zorder=5, edgecolors=BG, linewidths=1.8)
+ax2.set_xticks(xs)
+ax2.set_xticklabels(vendas_mes['Mes'], rotation=45, ha='right', fontsize=7)
+ax2.set_title('Vendas Mensais ao Longo do Tempo')
+ax2.set_ylabel('Quantidade', fontsize=9)
+
+# ── Gráfico 3 — Pizza: Top 10 Produtos por Receita ───────────────────────────
+ax3 = fig.add_subplot(gs[2])
+ax3.set_facecolor(CARD_BG)
+ax3.set_title('Participação dos Top 10 Produtos na Receita', color=TEXT,
+              fontsize=12, fontweight='bold', pad=14)
+for spine in ax3.spines.values():
+    spine.set_edgecolor(BORDER)
+
+wedges, texts, autotexts = ax3.pie(
+    top10_receita['Receita'],
+    labels=None,
+    colors=PIZZA_COLORS,
+    autopct='%1.1f%%',
+    startangle=140,
+    wedgeprops=dict(edgecolor=BG, linewidth=2),
+    pctdistance=0.78,
+)
+for at in autotexts:
+    at.set_color(TEXT)
+    at.set_fontsize(8)
+
+# Furo central (donut)
+circle = plt.Circle((0, 0), 0.45, color=CARD_BG)
+ax3.add_patch(circle)
+
+# Legenda externa
+labels_pizza = [d[:35] + '...' if len(d) > 35 else d for d in top10_receita['Description']]
+ax3.legend(wedges, labels_pizza,
+           loc='center left', bbox_to_anchor=(1.05, 0.5),
+           fontsize=8, frameon=False,
+           labelcolor=SUBTEXT)
+
+# ── Footer ────────────────────────────────────────────────────────────────────
+fig.add_artist(plt.Line2D([0.04, 0.96], [0.025, 0.025],
+               transform=fig.transFigure, color=BORDER, linewidth=1))
+fig.text(0.5, 0.013,
+         '© 2024  ·  Varejo Online Analytics  ·  Powered by Matplotlib + Pandas',
+         ha='center', fontsize=7, color=SUBTEXT, fontfamily='monospace')
+
+# -------------------- Salvar e Exibir -------------------- #
+print('\nDashboard gerado com sucesso!')
+plt.savefig('dashboard_varejo.png', dpi=150, bbox_inches='tight',
+            facecolor=BG, edgecolor='none')
+print('Imagem salva: dashboard_varejo.png')
+plt.show()
